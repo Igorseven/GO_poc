@@ -4,14 +4,18 @@ import (
 	handlers "PocGo/internal/handler"
 	"PocGo/internal/middleware"
 	applicationService "PocGo/internal/services"
+	"context"
+	"errors"
 	configIO "fmt"
 	muxRouter "github.com/gorilla/mux"
 	httpclient "net/http"
+	"time"
 )
 
 type ApplicationServer struct {
 	userHandler handlers.UserHandler
 	router      *muxRouter.Router
+	httpServer  *httpclient.Server
 }
 
 func NewServer(
@@ -50,12 +54,35 @@ func (server *ApplicationServer) setupRoutes() {
 
 }
 
-func (server *ApplicationServer) Start() error {
+func (server *ApplicationServer) Start(ctx context.Context) error {
 	configIO.Println("Servidor iniciado na porta 8080")
 
 	handler := middleware.Logging(server.router)
 
-	return httpclient.ListenAndServe(":8080", handler)
+	server.httpServer = &httpclient.Server{
+		Addr:    ":8080",
+		Handler: handler,
+	}
+
+	go func() {
+		if err := server.httpServer.ListenAndServe(); err != nil && !errors.Is(err, httpclient.ErrServerClosed) {
+			configIO.Printf("Erro ao iniciar servidor: %v\n", err)
+		}
+	}()
+
+	<-ctx.Done()
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	return server.httpServer.Shutdown(shutdownCtx)
+}
+
+func (server *ApplicationServer) Shutdown(ctx context.Context) error {
+	if server.httpServer != nil {
+		return server.httpServer.Shutdown(ctx)
+	}
+	return nil
 }
 
 func (server *ApplicationServer) handleHealth(w httpclient.ResponseWriter, _ *httpclient.Request) {

@@ -8,6 +8,7 @@ import (
 	applicationServer "PocGo/internal/server"
 	service "PocGo/internal/services"
 	dataBaseConnection "PocGo/pkg/database"
+	"context"
 	dbProvider "database/sql"
 	logger "log"
 	"sync"
@@ -143,8 +144,8 @@ func (app *Application) StopScheduler() {
 	logger.Println(notify.LogRotineStoped)
 }
 
-func (app *Application) Run() error {
+func (app *Application) Run(ctx context.Context) error {
 	app.startDailyScheduler(*app.Configuration)
 
-	return app.Server.Start()
+	return app.Server.Start(ctx)
 }
